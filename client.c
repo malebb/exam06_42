@@ -9,8 +9,10 @@ int	main(int argc, char **argv)
 	int		client_fd;
 	int		server_fd;
 	struct  sockaddr_in	addr;
-	char buf[1000];
+	size_t	buf_size = 1000;
+	char *buf = malloc(sizeof(char) * 1000);
 	int		bytes;
+	int		size_line;
 
 	if (argc < 2)
 	{
@@ -32,9 +34,9 @@ int	main(int argc, char **argv)
 	while (1)
 	{
 		printf("Enter new message: \n");
-		scanf("%s", buf);
-		printf("Your message: %s\n", buf);
-		if ((bytes = send(client_fd, buf, 1000, 0))== -1)
+		size_line = getline(&buf, &buf_size, stdin);
+//		printf("Your message: %s | %d\n", buf, size_line);
+		if ((bytes = send(client_fd, buf, size_line, 0)) == -1)
 			printf("Error: send failed\n");
 		else
 			printf("%d bytes have been sent\n", bytes);

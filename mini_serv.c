@@ -39,17 +39,18 @@ int get_port(char *arg)
 	return (port);
 }
 
-int *add_clients(int *clients, int fd, int nb_clients)
+int *add_fd(int *fds, int fd, int nb_fd, int *last_inserted)
 {
-	int *new_clients;
+	int *new_fds;
 
-	new_clients = malloc(sizeof(int) * (nb_clients + 1));
-	for (int i = 0; i < nb_clients; ++i)
+	new_fds= malloc(sizeof(int) * (nb_fd+ 1));
+	for (int i = 0; i < nb_fd; ++i)
 	{
-		new_clients[i] = clients[i];
+		new_fds[i] = fds[i];
 	}
-	new_clients[nb_clients] = fd;
-	return (new_clients);
+	new_fds[nb_fd] = fd;
+	*last_inserted = fd;
+	return (new_fds);
 }
 
 int	main(int argc, char **argv)
@@ -61,8 +62,9 @@ int	main(int argc, char **argv)
 	struct sockaddr_in		addr;
 	char					buf[1024];
 	fd_set					fds;
-	int						*clients;
-	int						nb_clients = 0;
+	int						*fd_set = NULL;
+	int						nb_fd = 0;
+	int						last_inserted = 2;
 
 	if (!check_arg(argc))
 		arg_err();
@@ -79,38 +81,37 @@ int	main(int argc, char **argv)
 		fatal_err();
 	if (listen(server_fd, 3) == -1)
 		fatal_err();
+	FD_ZERO(&fds);
+	FD_SET(server_fd, &fds);
+	fd_set = add_fd(fd_set, server_fd, nb_fd, &last_inserted);
+	nb_fd++;
 	while (1)
 	{
-		printf("loop\n");
-		FD_ZERO(&fds);
-		FD_SET(server_fd, &fds);
-		select(server_fd + 1, &fds, NULL, NULL, NULL);
-		if (FD_ISSET(server_fd, &fds))
+		printf("loop, server = %d\n", server_fd);
+		select(last_inserted + 1, &fds, NULL, NULL, NULL);
+		printf("fd_set : ");
+		for (int i = 0; i < nb_fd; ++i)
 		{
-			printf("Waiting for connection ...\n");
-			if ((client_fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len)) == -1)
-				fatal_err();
-			printf("Connection established\n");
-			clients = add_clients(clients, client_fd, nb_clients);
-			nb_clients++;
-			for (int i = 0; i < nb_clients; ++i)
-			{
-				printf("fd = %d client %d \n", client_fd, clients[i]);
-			}
+			printf("|%d|", fd_set[i]);
 		}
-		for (int i = 0; i < nb_clients; ++i)
+		printf("\n");
+		for (int i = 0; i < nb_fd; ++i)
 		{
-			printf("CLIENT %d \n", clients[i]);
-		}
-		for (int i = 0; i < client_fd; ++i)
-		{
-			FD_ZERO(&fds);
-			FD_SET(client_fd, &fds);
-			select(client_fd + 1, &fds, NULL, NULL, NULL);
-			if (FD_ISSET(client_fd, &fds))
+			if (FD_ISSET(fd_set[i], &fds))
 			{
-				recv(client_fd, buf, 1024, 0);
-				printf("Recv: %s\n", buf);
+				if (fd_set[i] == server_fd)
+				{
+					printf("new connection !\n");
+					client_fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len);
+					FD_SET(client_fd, &fds);
+					fd_set = add_fd(fd_set, client_fd, nb_fd, &last_inserted);
+					nb_fd++;
+				}
+				else
+				{
+					/*printf("%ld bytes received", */recv(fd_set[i], buf, 1024, 0);
+					printf("recv from client %d: %s\n", i + 1, buf);
+				}
 			}
 		}
 	}
