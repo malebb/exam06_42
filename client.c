@@ -10,6 +10,7 @@ int	main(int argc, char **argv)
 	int		server_fd;
 	struct  sockaddr_in	addr;
 	char buf[1000];
+	int		bytes;
 
 	if (argc < 2)
 	{
@@ -33,8 +34,10 @@ int	main(int argc, char **argv)
 		printf("Enter new message: \n");
 		scanf("%s", buf);
 		printf("Your message: %s\n", buf);
-		if (send(client_fd, buf, 1000, 0) == -1)
+		if ((bytes = send(client_fd, buf, 1000, 0))== -1)
 			printf("Error: send failed\n");
+		else
+			printf("%d bytes have been sent\n", bytes);
 	}
 	return (0);
 }

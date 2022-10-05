@@ -39,6 +39,19 @@ int get_port(char *arg)
 	return (port);
 }
 
+int *add_clients(int *clients, int fd, int nb_clients)
+{
+	int *new_clients;
+
+	new_clients = malloc(sizeof(int) * (nb_clients + 1));
+	for (int i = 0; i < nb_clients; ++i)
+	{
+		new_clients[i] = clients[i];
+	}
+	new_clients[nb_clients] = fd;
+	return (new_clients);
+}
+
 int	main(int argc, char **argv)
 {
 	int						port;
@@ -48,6 +61,8 @@ int	main(int argc, char **argv)
 	struct sockaddr_in		addr;
 	char					buf[1024];
 	fd_set					fds;
+	int						*clients;
+	int						nb_clients = 0;
 
 	if (!check_arg(argc))
 		arg_err();
@@ -62,19 +77,41 @@ int	main(int argc, char **argv)
 	addr_len = sizeof(addr);
 	if (bind(server_fd, (struct sockaddr *)&addr, addr_len)== -1)
 		fatal_err();
-	if (listen(server_fd, 0) == -1)
+	if (listen(server_fd, 3) == -1)
 		fatal_err();
 	while (1)
 	{
-		if ((client_fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len)) == -1)
-			fatal_err();
+		printf("loop\n");
 		FD_ZERO(&fds);
-		FD_SET(client_fd, &fds);
-		select(client_fd + 1, &fds, NULL, NULL, NULL);
-		if (FD_ISSET(client_fd, &fds))
+		FD_SET(server_fd, &fds);
+		select(server_fd + 1, &fds, NULL, NULL, NULL);
+		if (FD_ISSET(server_fd, &fds))
 		{
-			recv(client_fd, buf, 1024, 0);
-			printf("Recv: %s\n", buf);
+			printf("Waiting for connection ...\n");
+			if ((client_fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len)) == -1)
+				fatal_err();
+			printf("Connection established\n");
+			clients = add_clients(clients, client_fd, nb_clients);
+			nb_clients++;
+			for (int i = 0; i < nb_clients; ++i)
+			{
+				printf("fd = %d client %d \n", client_fd, clients[i]);
+			}
+		}
+		for (int i = 0; i < nb_clients; ++i)
+		{
+			printf("CLIENT %d \n", clients[i]);
+		}
+		for (int i = 0; i < client_fd; ++i)
+		{
+			FD_ZERO(&fds);
+			FD_SET(client_fd, &fds);
+			select(client_fd + 1, &fds, NULL, NULL, NULL);
+			if (FD_ISSET(client_fd, &fds))
+			{
+				recv(client_fd, buf, 1024, 0);
+				printf("Recv: %s\n", buf);
+			}
 		}
 	}
 	return (0);
