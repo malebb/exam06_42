@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <strings.h>
 
 typedef int bool;
 
@@ -70,7 +71,7 @@ int	main(int argc, char **argv)
 		arg_err();
 	if ((port = get_port(argv[1])) == -1)
 		fatal_err();
-	printf("port = %d\n", port);
+//	printf("port = %d\n", port);
 	server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
 	addr.sin_family = AF_INET;
@@ -89,19 +90,22 @@ int	main(int argc, char **argv)
 	{
 		printf("loop, server = %d\n", server_fd);
 		select(last_inserted + 1, &fds, NULL, NULL, NULL);
-		printf("fd_set : ");
+		printf("loop, server2 = %d\n", server_fd);
+/*		printf("fd_set : ");
 		for (int i = 0; i < nb_fd; ++i)
 		{
 			printf("|%d|", fd_set[i]);
 		}
 		printf("\n");
+		*/
 		for (int i = 0; i < nb_fd; ++i)
 		{
 			if (FD_ISSET(fd_set[i], &fds))
 			{
 				if (fd_set[i] == server_fd)
 				{
-					printf("new connection !\n");
+					if (i == 0)
+						printf("New connection\n");
 					client_fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len);
 					FD_SET(client_fd, &fds);
 					fd_set = add_fd(fd_set, client_fd, nb_fd, &last_inserted);
@@ -109,8 +113,15 @@ int	main(int argc, char **argv)
 				}
 				else
 				{
-					/*printf("%ld bytes received", */recv(fd_set[i], buf, 1024, 0);
-					printf("recv from client %d: %s\n", i + 1, buf);
+					char			*msg;
+					int				byte;
+
+					bzero(buf, 1024);
+					byte = recv(fd_set[i], buf, 1024, 0);
+					msg = malloc(sizeof(char) * byte);
+					strcpy(msg, buf);
+					printf("client %d : %s", i, msg);
+					free(msg);
 				}
 			}
 		}
