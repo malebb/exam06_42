@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <strings.h>
 
 typedef int bool;
 
@@ -84,6 +85,7 @@ int	main(int argc, char **argv)
 		arg_err();
 	if ((port = get_port(argv[1])) == -1)
 		fatal_err();
+//	printf("port = %d\n", port);
 	server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
 	addr.sin_family = AF_INET;
@@ -119,7 +121,8 @@ int	main(int argc, char **argv)
 			{
 				if (fd_set[i] == server_fd)
 				{
-					printf("new connection !\n");
+					if (i == 0)
+						printf("New connection\n");
 					client_fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len);
 					
 					FD_SET(client_fd, &fds_backup);
