@@ -36,7 +36,7 @@ int	main(int argc, char **argv)
 		printf("Enter new message: \n");
 		size_line = getline(&buf, &buf_size, stdin);
 //		printf("Your message: %s | %d\n", buf, size_line);
-		if ((bytes = send(client_fd, buf, size_line, 0)) == -1)
+		if ((bytes = send(client_fd, buf, size_line - 1, 0)) == -1)
 			printf("Error: send failed\n");
 		else
 			printf("%d bytes have been sent\n", bytes);
