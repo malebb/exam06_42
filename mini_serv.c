@@ -66,6 +66,14 @@ char	*extract_msg_from_buffer(int	nb_bytes, char buf[1024])
 	return (msg);
 }
 
+void	send_msg_to_clients(char *msg, int *fd_set, int nb_fd)
+{
+	for (int i = 1; i < nb_fd; ++i)
+	{
+		send(fd_set[i], msg, strlen(msg), 0);
+	}
+}
+
 int	main(int argc, char **argv)
 {
 	int						port;
@@ -134,9 +142,8 @@ int	main(int argc, char **argv)
 					int		nb_bytes;
 					char	*msg;
 					/*printf("%ld bytes received", */nb_bytes = recv(fd_set[i], buf, 1024, 0);
-
 					msg = extract_msg_from_buffer(nb_bytes, buf);
-					
+					send_msg_to_clients(msg, fd_set, nb_fd);
 					printf("user %d: %s\n", i, msg);
 				}
 			}
