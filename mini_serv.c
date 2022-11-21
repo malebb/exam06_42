@@ -132,14 +132,19 @@ void	manage_msg(fd_set *fds_backup, int ***fd_set, int i, int *nb_fd, int *nb_cl
 	const int		buf_size = 5;
 	int				nb_bytes = buf_size;
 	char			buf[buf_size];
-	char			*msg = malloc(sizeof(char) * (1));
+	char			*msg = NULL; 
 	char			*msg_to_send;
 
+	msg = malloc(sizeof(char) * (1));
+	if (!msg)
+		fatal_err();
 	memset(msg, '\0', 1);
 	do {
 		nb_bytes = recv((*fd_set)[i][1], buf, buf_size - 1, 0);
 		buf[nb_bytes] = '\0';
 		msg = realloc(msg, sizeof(char) * (strlen(msg) + nb_bytes + 1));
+		if (!msg)
+			fatal_err();
 		strcat(msg, buf);
 	}
 	while (nb_bytes == buf_size - 1 && buf[nb_bytes - 1] != '\n');
