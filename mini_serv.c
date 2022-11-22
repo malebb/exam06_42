@@ -1,271 +1,285 @@
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
-#include <sys/select.h>
-#include <strings.h>
+#include <netinet/in.h>
 
-typedef int bool;
-typedef struct s_server
+typedef struct 		s_server
 {
 	struct sockaddr_in		addr;
-	socklen_t 				addr_len;
+	socklen_t				addr_len;
+	int						port;
 	int						fd;
-}			t_server;
+	int						**fds;
+	int						nb_fd;
+	int						id;
+	fd_set					fd_set;
+	fd_set					fd_set_backup;
+}					t_server;
 
-bool	check_arg(int argc)
-{
-	return (argc > 1);
-}
+typedef int			bool;
 
-void	putstr_fd(char *str, int fd)
+void	ft_putstr_fd(char *str, int fd)
 {
 	write(fd, str, strlen(str));
 }
 
 void	arg_err(void)
 {
-	putstr_fd("Wrong number of arguments\n", 2);
-	exit(1);
+	ft_putstr_fd("Wrong number of arguments\n", 2);
+	exit(EXIT_FAILURE);
 }
 
-void	fatal_err(void)
+void	fatal_err(t_server *server)
 {
-	putstr_fd("Fatal error\n", 2);
-	exit(1);
-}
-
-int get_port(char *arg)
-{
-	int		port;
-
-	port = atoi(arg);
-	return (port);
-}
-
-int ***add_fd(int ***fds, int fd, int *nb_fd, int *id)
-{
-	*fds = realloc(*fds, sizeof(int *) * (*nb_fd + 1));
-	if (!(*fds))
-		return (NULL);
-	(*fds)[*nb_fd] = malloc(sizeof(int) * 2);
-	if (!(*fds)[*nb_fd])
-		return (NULL);
-	(*fds)[*nb_fd][0] = *id;
-	(*fds)[*nb_fd][1] = fd;
-	*nb_fd = *nb_fd + 1;
-	*id = *id + 1;
-	return (fds);
-}
-
-int ***remove_fd(int ***fds, int fd, int *nb_fd)
-{
-	int		pos;
-
-	for (int i = 0; i < *nb_fd; ++i)
+	for (int i = 0; i < server->nb_fd; ++i)
 	{
-		if ((*fds)[i][1] == fd)
-		{
-			close((*fds)[i][1]);
-			free((*fds)[i]);
-			pos = i;
-		}
+		close(server->fds[i][1]);
+		free(server->fds[i]);
 	}
-	if (pos != *nb_fd - 1)
-	{
-		for (int i = pos; i < *nb_fd - 1; ++i)
-		{
-			(*fds)[i] = (*fds)[i + 1];
-		}
-	}
-	*fds = realloc(*fds, sizeof(int *) * (*nb_fd - 1));
-	if (!(*fds))
-		return (NULL);
-	*nb_fd = *nb_fd - 1;
-	return (fds);
+	free(server->fds);
+	ft_putstr_fd("Fatal error\n", 2);
+	exit(EXIT_FAILURE);
 }
 
-void	send_msg_to_clients(char *msg, int **fd_set, int nb_fd, int sender)
+int		greatest_inserted(int **fds, int nb_fd)
 {
-	for (int i = 1; i < nb_fd; ++i)
+	int		greatest = 2;
+
+	for (int i = 0; i < nb_fd; i++)
 	{
-		if (fd_set[i][1] != sender)
-		{
-			if (send(fd_set[i][1], msg, strlen(msg), 0) == -1)
-				fatal_err();
-		}
+		if (fds[i][1] > greatest)
+			greatest = fds[i][1];
 	}
+	return (greatest);
 }
 
-int		nb_size(int nb)
+void	add_fd(t_server *server, int fd)
+{
+	server->fds = realloc(server->fds, sizeof(int *) * (server->nb_fd + 1));
+	if (!server->fds)
+		fatal_err(server);
+	server->fds[server->nb_fd] = malloc(sizeof(int) * 2);
+	if (!server->fds[server->nb_fd])
+		fatal_err(server);
+	server->fds[server->nb_fd][0] = server->id;
+	server->fds[server->nb_fd][1] = fd;
+	server->nb_fd++;
+	server->id++;
+}
+
+void	init_server(t_server *server, int argc, char **argv)
+{
+	server->fds = NULL;
+	server->id = -1;
+	server->nb_fd = 0;
+	server->port = atoi(argv[argc - 1]);
+	server->fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (server->fd == -1)
+		fatal_err(server);
+	server->addr.sin_family = AF_INET;
+	server->addr.sin_port = htons(server->port);
+	server->addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	server->addr_len = sizeof(server->addr);
+	if (bind(server->fd, (struct sockaddr *)&server->addr, server->addr_len) == -1)
+		fatal_err(server);
+	if (listen(server->fd, 1) == -1)
+		fatal_err(server);
+	FD_ZERO(&server->fd_set_backup);
+	FD_SET(server->fd, &server->fd_set_backup);
+	add_fd(server, server->fd);
+}
+
+bool	send_msg_to_clients(t_server *server, int sender, char *msg)
+{
+	for (int i = 1; i < server->nb_fd; ++i)
+	{
+		if (server->fds[i][1] == sender)
+			continue ;
+		if (send(server->fds[i][1], msg, strlen(msg), 0) == -1)
+			return (0);
+	}
+	return (1);
+}
+
+int		size_nb(int nb)
 {
 	int		size;
 
 	size = 1;
 	while (nb >= 10)
 	{
-		nb /= 10;
 		size++;
+		nb /= 10;
 	}
 	return (size);
 }
 
-int	greatest_inserted(int **fd_set, int nb_fd)
+void	handle_new_connection(t_server *server)
 {
-	int		greatest = 2;
+	int		client_fd;
+	char	*msg;
 
-	for (int i = 0; i < nb_fd; ++i)
+	client_fd = accept(server->fd, (struct sockaddr *)&server->addr, &server->addr_len);
+	if (client_fd == -1)
+		fatal_err(server);
+	FD_SET(client_fd, &server->fd_set_backup);
+	add_fd(server, client_fd);
+	msg = malloc(sizeof(char) * (29 + size_nb(server->fds[server->nb_fd - 1][0]) + 1));
+	if (!msg)
+		fatal_err(server);
+	sprintf(msg, "server: client %d just arrived\n", server->fds[server->nb_fd - 1][0]);
+	if (!send_msg_to_clients(server, client_fd, msg))
 	{
-		if (fd_set[i][1] > greatest)
-		{
-			greatest = fd_set[i][1];
-		}
+		free(msg);
+		fatal_err(server);
 	}
-	return (greatest);
+	free(msg);
 }
 
-void	manage_msg(fd_set *fds_backup, int ***fd_set, int i, int *nb_fd, int *nb_client)
+void	remove_fd(t_server *server, int pos)
 {
+	for (int i = pos; i < server->nb_fd - 1; ++i)
+	{
+		server->fds[i] = server->fds[i + 1];
+	}
+	server->fds = realloc(server->fds, sizeof(int *) * (server->nb_fd - 1));
+	if (!server->fds)
+		fatal_err(server);
+	server->nb_fd--;
+}
+
+void	handle_disconnection(t_server *server, int i)
+{
+	char	*msg;
+
+	msg = malloc(sizeof(char) * (26 + size_nb(server->fds[i][0]) + 1));
+	if (!msg)
+		fatal_err(server);
+	sprintf(msg, "server: client %d just left\n", server->fds[i][0]);
+	if (!send_msg_to_clients(server, server->fds[i][1], msg))
+	{
+		free(msg);
+		fatal_err(server);
+	}
+	free(msg);
+	FD_CLR(server->fds[i][1], &server->fd_set_backup);
+	close(server->fds[i][1]);
+	free(server->fds[i]);
+	remove_fd(server, i);
+}
+
+char	*extract_msg(t_server *server, int i)
+{
+	char			*msg = NULL;
 	const int		buf_size = 5;
-	int				nb_bytes = buf_size;
 	char			buf[buf_size];
-	char			*msg = NULL; 
-	char			*msg_to_send;
+	int				byte;
 
 	msg = malloc(sizeof(char) * (1));
 	if (!msg)
-		fatal_err();
+		fatal_err(server);
 	memset(msg, '\0', 1);
-	do {
-		nb_bytes = recv((*fd_set)[i][1], buf, buf_size - 1, 0);
-		buf[nb_bytes] = '\0';
-		msg = realloc(msg, sizeof(char) * (strlen(msg) + nb_bytes + 1));
-		if (!msg)
-			fatal_err();
-		strcat(msg, buf);
-	}
-	while (nb_bytes == buf_size - 1 && buf[nb_bytes - 1] != '\n');
-	if (nb_bytes <= 0)
+	do
 	{
-		msg_to_send = malloc(sizeof(char) * (27 + nb_size((*fd_set)[i][0])));
-		if (!msg_to_send)
-			fatal_err();
-		sprintf(msg_to_send, "server: client %d just left\n", (*fd_set)[i][0]);
-		send_msg_to_clients(msg_to_send, *fd_set, *nb_fd, (*fd_set)[i][1]);
-		FD_CLR((*fd_set)[i][1], fds_backup);
-		if (!remove_fd(fd_set, (*fd_set)[i][1], nb_fd))
-			fatal_err();
-		*nb_client = *nb_client - 1;
+		byte = recv(server->fds[i][1], buf, buf_size - 1, 0);
+		if (byte == -1)
+		{
+			free(msg);
+			fatal_err(server);
+		}
+		else if (!byte)
+		{
+			free(msg);
+			handle_disconnection(server, i);
+			return (NULL);
+		}
+		else
+		{
+			buf[byte] = '\0';
+			msg = realloc(msg, sizeof(char) * (strlen(msg) + byte + 1));
+			if (!msg)
+				fatal_err(server);
+			strcat(msg, buf);
+		}
 	}
-	else
-	{
-		int		size_msg;
-		int		start_line_size = nb_size((*fd_set)[i][0]) + 9;
-		int		j;
+	while ((byte == buf_size - 1) && buf[byte - 1] != '\n');
+	return (msg);
+}
 
-		j = 0;
+void	handle_new_message(t_server *server, int i)
+{
+	char	*msg;
+	int		msg_size;
+	char	*msg_to_send;
+	int		start_line_size = 9 + size_nb(server->fds[i][0]);
+
+	msg = extract_msg(server, i);
+	if (msg)
+	{
+		int j = 0;
 		while (msg[j] != '\0')
 		{
-			size_msg = 0;
-			for (int k = 0; msg[j + k] != '\n'; k++)
+			msg_size = 1;
+			for (int k = 0; msg[j + k] != '\n'; ++k)
 			{
-				size_msg++;
+				msg_size++;
 			}
-			size_msg += start_line_size + 1;
-			msg_to_send = malloc(sizeof(char) * (size_msg + 1));
+			msg_to_send = malloc(sizeof(char) * (msg_size + start_line_size + 1));
 			if (!msg_to_send)
-				fatal_err();
-			sprintf(msg_to_send, "client %d: ", (*fd_set)[i][0]);
-			for (int k = 0; msg[j + k] != '\n'; k++)
+			{
+				free(msg);
+				fatal_err(server);
+			}
+			sprintf(msg_to_send, "client %d: ", server->fds[i][0]);
+			for (int k = 0; msg[j + k] != '\n'; ++k)
 			{
 				msg_to_send[start_line_size + k] = msg[j + k];
 			}
-			msg_to_send[size_msg - 1] = '\n';
-			msg_to_send[size_msg] = '\0';
-			j += (size_msg - start_line_size);
-			send_msg_to_clients(msg_to_send, *fd_set, *nb_fd, (*fd_set)[i][1]);
+			msg_to_send[start_line_size + msg_size - 1] = '\n';
+			msg_to_send[start_line_size + msg_size] = '\0';
+			if (!send_msg_to_clients(server, server->fds[i][1], msg_to_send))
+			{
+				free(msg_to_send);
+				free(msg);
+				fatal_err(server);
+			}
 			free(msg_to_send);
+			j += msg_size;
 		}
 		free(msg);
 	}
 }
 
-void	init_server(int argc, char **argv, t_server *server)
+void	start_server(t_server *server)
 {
-	int						port;
-
-	if (!check_arg(argc))
-		arg_err();
-	if ((port = get_port(argv[1])) == -1)
-		fatal_err();
-	server->fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (server->fd == -1)
-		fatal_err();
-	server->addr.sin_family = AF_INET;
-	server->addr.sin_port = htons(port);
-	server->addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	server->addr_len = sizeof(server->addr);
-	if (bind(server->fd, (struct sockaddr *)&server->addr, server->addr_len) == -1)
-		fatal_err();
-	if (listen(server->fd, 1) == -1)
-		fatal_err();
-}
-
-void	handle_new_connection(fd_set *fds_backup, t_server server, int ***fd_set, int *nb_fd, int *id, int *nb_client)
-{
-	char					*new_client_msg;
-	int						client_fd;
-
-	client_fd = accept(server.fd, (struct sockaddr *)&server.addr, &server.addr_len);
-	if (client_fd == -1)
-		fatal_err();
-	FD_SET(client_fd, fds_backup);
-	if (!add_fd(fd_set, client_fd, nb_fd, id))
-		fatal_err();
-	new_client_msg = malloc(sizeof(char) * (30 + nb_size((*fd_set)[*nb_fd - 1][0])));
-	if (!new_client_msg)
-		fatal_err();
-	sprintf(new_client_msg, "server: client %d just arrived\n", (*fd_set)[*nb_fd - 1][0]);
-	send_msg_to_clients(new_client_msg, *fd_set, *nb_fd, (*fd_set)[*nb_fd - 1][1]);
-	*nb_client = *nb_client + 1;
-	free(new_client_msg);
+	while (1)
+	{
+		server->fd_set = server->fd_set_backup;
+		if (select(greatest_inserted(server->fds, server->nb_fd) + 1, &server->fd_set, NULL, NULL, 0) <= 0)
+			continue ;
+		for (int i = 0; i < server->nb_fd; ++i)
+		{
+			if (FD_ISSET(server->fds[i][1], &server->fd_set) == 1)
+			{
+				if (i == 0)
+					handle_new_connection(server);
+				else
+					handle_new_message(server, i);
+			}
+		}
+	}
 }
 
 int	main(int argc, char **argv)
 {
-	fd_set					fds;
-	fd_set					fds_backup;
-	int						**fd_set = NULL;
-	int						nb_fd = 0;
-	int						nb_client;
-	int						id = -1;
-	t_server				server;
+	t_server	server;
 
-	init_server(argc, argv, &server);
-	FD_ZERO(&fds);
-	FD_SET(server.fd, &fds);
-	if (!add_fd(&fd_set, server.fd, &nb_fd, &id))
-		fatal_err();
-	fds_backup = fds;
-	while (1)
-	{
-		fds = fds_backup;
-		if (select(greatest_inserted(fd_set, nb_fd) + 1, &fds, NULL, NULL, NULL) <= 0)
-			continue ;
-		nb_client = nb_fd;
-		for (int i = 0; i < nb_client; ++i)
-		{
-			if (FD_ISSET(fd_set[i][1], &fds))
-			{
-				if (fd_set[i][1] == server.fd)
-					handle_new_connection(&fds_backup, server, &fd_set, &nb_fd, &id, &nb_client);
-				else
-					manage_msg(&fds_backup, &fd_set, i, &nb_fd, &nb_client);
-			}
-		}
-	}
+	if (argc != 2)
+		arg_err();
+	init_server(&server, argc, argv);
+	start_server(&server);
 	return (0);
 }
