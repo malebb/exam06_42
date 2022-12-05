@@ -189,7 +189,7 @@ void	handle_new_msg(t_server *server, int i)
 			fatal_err(server);
 		}
 		next_msg[0] = '\0';
-		sprintf(msg_to_send, "%s%s\n", start_line, msg);
+		sprintf(msg_to_send, "%s%s\n", start_line, (msg + j));
 		send_msg_to_clients(msg_to_send, strlen(msg_to_send), server->clients[i].fd, server);
 		free(msg_to_send);
 		j += (next_msg - &msg[j]) + 1;
