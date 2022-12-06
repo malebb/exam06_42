@@ -148,8 +148,9 @@ char	*extract_from_buffer(t_server *server, int i)
 	char			buf[buf_size];
 	int				byte;
 
-	msg = malloc(sizeof(char) * 1);
-	memset(msg, '\0', 1);
+//	msg = malloc(sizeof(char) * 1);
+//	memset(msg, '\0', 1);
+	msg = calloc(1, sizeof(char));
 	do
 	{
 		byte = recv(server->clients[i].fd, buf, buf_size - 1, 0);
