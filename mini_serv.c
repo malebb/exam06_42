@@ -136,7 +136,7 @@ void	handle_disconnection(t_server *server, int i)
 {
 	char 	msg[1000];
 
-	sprintf(msg, "client %d just left\n", server->clients[i].id);
+	sprintf(msg, "server: client %d just left\n", server->clients[i].id);
 	send_msg_to_clients(msg, strlen(msg), server->clients[i].fd, server);
 	remove_client(server, i);
 }
