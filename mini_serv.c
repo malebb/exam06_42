@@ -66,7 +66,7 @@ void	init_server(int argc, char **argv, t_server *server)
 		fatal_err(server);
 	server->addr.sin_family = AF_INET;
 	server->addr.sin_port = htons(port);
-	server->addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	server->addr.sin_addr.s_addr = htonl(2130706433);
 	if (bind(server->fd, (struct sockaddr *)&server->addr, server->addrlen) == -1)
 		fatal_err(server);
 	if (listen(server->fd, 1) == -1)
@@ -157,6 +157,11 @@ char	*extract_from_buf(t_server *server, int pos)
 		byte_read = recv(server->clients[pos].fd, buf, buf_size - 1, 0);
 		if (!byte_read)
 			handle_disconnection(server, pos);
+		else if (byte_read == -1)
+		{
+			free(msg);
+			fatal_err(server);
+		}
 		else
 		{
 			buf[byte_read] = '\0';
